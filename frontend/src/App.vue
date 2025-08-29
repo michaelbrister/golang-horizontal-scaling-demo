@@ -2,7 +2,6 @@
   <div class="container">
     <h1>Golang Horizontal Scaling Demo (Vue)</h1>
     <p>This UI hits <code>/api</code> via Traefik. Refreshes every ~1.5s.</p>
-
     <section class="card">
       <h2>Status</h2>
       <p v-if="loading">Loading…</p>
@@ -13,6 +12,25 @@
         <div><strong>Session count:</strong> {{ data.session_count }}</div>
         <div><strong>Global count:</strong> {{ data.global_count }}</div>
       </div>
+    </section>
+
+    <section class="card">
+      <h2>Auto refresh</h2>
+      <label>
+        Interval:
+        <input
+          type="number"
+          step="0.5"
+          min="0.5"
+          style="width: 6rem; padding: 0.4rem; margin: 0 0.5rem;"
+          v-model.number="refreshSecs"
+        />
+        seconds
+      </label>
+      <p style="margin-top: .5rem; opacity:.8">Tip: set to a higher value if you want fewer updates.</p>
+      <button @click="paused = !paused" style="padding:.5rem 1rem; margin-top:.5rem;">
+        {{ paused ? 'Resume' : 'Pause' }}
+      </button>
     </section>
 
     <section class="card">
@@ -30,17 +48,25 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 
 const data = ref(null)
 const loading = ref(true)
 const error = ref(null)
 const jobName = ref('demo-job')
 
+const refreshSecs = ref(5)
+const paused = ref(false)
+
+let timerId = null
+
 const load = async () => {
   try {
     loading.value = true
-    const res = await fetch('/api/')
+    const res = await fetch('/api/', {
+      headers: { 'Accept': 'application/json' },
+      credentials: 'include'
+    })
     if (!res.ok) throw new Error('Request failed')
     data.value = await res.json()
     error.value = null
@@ -51,19 +77,23 @@ const load = async () => {
   }
 }
 
-const enqueue = async () => {
-  try {
-    const res = await fetch('/api/enqueue?job=' + encodeURIComponent(jobName.value))
-    const json = await res.json()
-    alert('Enqueued: ' + json.enqueued)
-  } catch (e) {
-    alert('Failed to enqueue: ' + e.message)
-  }
+function startTimer() {
+  if (timerId) clearInterval(timerId)
+  if (paused.value) return
+  const ms = Math.max(250, refreshSecs.value * 1000)
+  timerId = setInterval(load, ms)
 }
+
+watch(refreshSecs, startTimer)
+watch(paused, () => startTimer())
 
 onMounted(() => {
   load()
-  setInterval(load, 5000)
+  startTimer()
+})
+
+onUnmounted(() => {
+  if (timerId) clearInterval(timerId)
 })
 </script>
 
