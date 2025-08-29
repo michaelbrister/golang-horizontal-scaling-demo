@@ -1,17 +1,17 @@
 # Golang Horizontal Scaling PoC (Traefik + Redis + Docker Compose)
 
-This proof‑of‑concept demonstrates how a **stateful** web app can scale **horizontally** by externalizing state to **Redis** and load‑balancing multiple app instances with **Traefik**.
+This proof‑of‑concept demonstrates how a **stateful** web app can scale **horizontally** by externalizing state to **Redis (latest)** and load‑balancing multiple app instances with **Traefik**.
 
 ## What’s inside
 
-- **Traefik (v2.11)** – reverse proxy / load balancer, auto‑discovers containers via the Docker provider.
-- **Go web app** – exposes a tiny API that:
+- **Traefik (latest)** – reverse proxy / load balancer, auto‑discovers containers via the Docker provider.
+- **Go web app** (built from Golang `latest` base image) – exposes a tiny API that:
   - sets a `sid` cookie,
   - increments a **per‑session** counter in Redis,
   - increments a **global** counter in Redis,
   - reports which **container** served your request.
 - **Worker** – optional background consumer reading from a Redis list (`jobs`) to show async processing.
-- **Redis** – shared state store.
+- **Redis (latest)** – shared state store.
 
 ```
 .

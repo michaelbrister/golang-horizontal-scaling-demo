@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   redis:
-    image: redis:7-alpine
+    image: redis:latest
     ports:
       - "6379:6379"
     command: ["redis-server", "--appendonly", "yes"]
@@ -16,7 +16,7 @@ services:
     build:
       context: ./app
     environment:
-      - REDIS_ADDR=redis:6379
+      - REDIS_ADDR=redis:latest
       - REDIS_DB=0
       - PORT=8080
       - ROLE=web
@@ -35,7 +35,7 @@ services:
     build:
       context: ./app
     environment:
-      - REDIS_ADDR=redis:6379
+      - REDIS_ADDR=redis:latest
       - REDIS_DB=0
       - ROLE=worker
     depends_on:
@@ -43,7 +43,7 @@ services:
         condition: service_healthy
 
   traefik:
-    image: traefik:v2.11
+    image: traefik:latest
     command:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
