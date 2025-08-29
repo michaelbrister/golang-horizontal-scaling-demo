@@ -14,6 +14,9 @@ This proof‑of‑concept demonstrates how a **stateful** web app can scale **ho
 - **Redis (latest)** – shared state store.
 
 ```
+
+make scale N=5   # Scale to 5 replicas
+make scale N=2   # Scale down to 2 replicas
 .
 ├─ docker-compose.yml          # Traefik-based stack
 ├─ app/
@@ -26,6 +29,10 @@ This proof‑of‑concept demonstrates how a **stateful** web app can scale **ho
 
 - Docker Desktop or Docker Engine 24+
 - Docker Compose V2
+
+> 💡 **Apple Silicon users (M1/M2/M3 Macs):**
+> The Dockerfile is configured with `GOARCH=amd64` so your Go app builds for Linux/amd64 inside Docker.
+> This avoids cross-architecture issues during `go build`. No extra flags needed when running `docker compose up`.
 
 ## Run (Traefik version)
 
@@ -103,3 +110,85 @@ docker compose down -v
 ```
 
 This stops containers and removes the Redis volume created by this stack.
+
+
+## Troubleshooting
+
+### Build fails at `go build`
+- Ensure you’re on a recent Docker + Compose version.
+- If you see `no required module provides package ...`, run `go mod tidy` locally inside `app/` and rebuild.
+- On corporate networks, `proxy.golang.org` may be blocked. Try setting:
+  ```bash
+  export GOPROXY=direct
+  docker compose build --no-cache
+  ```
+
+### Architecture issues on Apple Silicon (M1/M2/M3)
+- This project forces `GOARCH=amd64` in the Dockerfile so Go builds target Linux/amd64, matching the rest of the stack.
+- If you need to run **arm64** everywhere instead, update the Dockerfile and compose to use `arm64` images (e.g., `golang:latest` already supports arm64).
+
+### Redis connection errors
+- Ensure the `redis` container is healthy (`docker compose ps` shows `healthy`).
+- If the app starts too quickly, rebuild with `--no-cache` to apply the `depends_on` health check.
+
+### General tips
+- Rebuild with full logs to debug:
+  ```bash
+  docker compose build --no-cache --progress=plain
+  ```
+- Check container logs:
+  ```bash
+  docker compose logs -f app
+  docker compose logs -f worker
+  ```
+
+
+## Quickstart with Makefile
+
+This project includes a simple **Makefile** to make common tasks easier:
+
+```bash
+make up       # Build and start the stack with 3 app replicas
+make down     # Stop and remove containers + volumes
+make build    # Rebuild images without cache
+make logs     # Follow logs for all services
+make ps       # List running containers and their status
+```
+
+> You can still run `docker compose` commands directly, but the Makefile provides handy shortcuts.
+
+
+## Web Frontend
+
+This demo now includes a small **Vue 3** UI (built with Vite and served by **nginx**) to visualize scaling:
+- Traefik routes **`/api`** to the Go backend (prefix stripped), and routes **`/`** to the frontend.
+- The dashboard polls `/api/` every ~1.5s to show which container served your request, plus session/global counters.
+- You can enqueue jobs from the UI and watch the worker process them in logs.
+
+**Open:** http://localhost:8080/ (frontend) — it calls `/api/*` behind Traefik.
+
+### Build & run
+```bash
+make up
+# or: docker compose up --build --scale app=3
+```
+
+
+
+### Testing sessions with curl
+
+If you test the backend directly with `curl`, remember that `curl` does **not** keep cookies by default.  
+Use a *cookie jar* file to persist the `sid` cookie between requests:
+
+```bash
+# First request saves cookies to cookies.txt
+curl -c cookies.txt http://localhost:8080/api/
+
+# Subsequent requests send cookies from cookies.txt
+curl -b cookies.txt http://localhost:8080/api/
+```
+
+- `-c cookies.txt` → write response cookies into a file  
+- `-b cookies.txt` → read cookies from that file and include them in the next request  
+
+This way, you’ll see the **same `session_id`** and `session_count` increasing, just like in the web frontend.

@@ -16,7 +16,7 @@ services:
     build:
       context: ./app
     environment:
-      - REDIS_ADDR=redis:latest
+      - REDIS_ADDR=redis:6379
       - REDIS_DB=0
       - PORT=8080
       - ROLE=web
@@ -27,20 +27,42 @@ services:
       - "8080"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.app.rule=PathPrefix(`/`)"
-      - "traefik.http.routers.app.entrypoints=web"
-      - "traefik.http.services.app.loadbalancer.server.port=8080"
+      # Route API traffic to Go app
+      - "traefik.http.routers.api.rule=PathPrefix(`/api`)"
+      - "traefik.http.routers.api.entrypoints=web"
+      - "traefik.http.routers.api.priority=100"
+      - "traefik.http.routers.api.service=api"
+      - "traefik.http.services.api.loadbalancer.server.port=8080"
+      # Strip the /api prefix before hitting the app
+      - "traefik.http.routers.api.middlewares=strip-api"
+      - "traefik.http.middlewares.strip-api.stripprefix.prefixes=/api"
 
   worker:
     build:
       context: ./app
     environment:
-      - REDIS_ADDR=redis:latest
+      - REDIS_ADDR=redis:6379
       - REDIS_DB=0
       - ROLE=worker
     depends_on:
       redis:
         condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    depends_on:
+      - app
+    expose:
+      - "80"
+    labels:
+      - "traefik.enable=true"
+      # Route all non-/api paths to the frontend
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.routers.frontend.service=frontend"
+      - "traefik.http.routers.frontend.priority=1"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
 
   traefik:
     image: traefik:latest
@@ -56,3 +78,4 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       - app
+      - frontend
